@@ -2569,29 +2569,23 @@ var state = {
   trackedError: '',
 };
 
-// CLIENT_SCOPE: the repo URL is a plain constant, not a server read. Two links
-// because GitHub's issue form is easier to fill in when it already knows whether
-// this is a bug or a wish.
+// FEEDBACK LINKS. Plain client constants, no server read.
+// The issue bodies are joined from arrays and turned into newlines with
+// String.fromCharCode(10), so this block contains NO backslash escapes.
+// An earlier version wrote a literal escape sequence inside this template
+// literal; it became a real newline inside a single-quoted string and killed
+// the entire client script -- the app rendered a blank page.
 var FEEDBACK_REPO = 'https://github.com/linsengoh/stackable';
+function FEEDBACK_body_(lines){
+  return encodeURIComponent(lines.join(String.fromCharCode(10)));
+}
 var FEEDBACK_BUG_URL = FEEDBACK_REPO + '/issues/new?labels=bug&title=' +
-  encodeURIComponent('[Bug] ') + '&body=' + encodeURIComponent(
-    'What went wrong:
-
-
-What you expected:
-
-
-Anything else that might help:
-
-');
+  encodeURIComponent('[Bug] ') + '&body=' + FEEDBACK_body_([
+    'What went wrong:', '', '', 'What you expected:', '', '',
+    'Anything else that might help:', '', '']);
 var FEEDBACK_IDEA_URL = FEEDBACK_REPO + '/issues/new?labels=enhancement&title=' +
-  encodeURIComponent('[Idea] ') + '&body=' + encodeURIComponent(
-    'What would be useful:
-
-
-Why it matters to you:
-
-');
+  encodeURIComponent('[Idea] ') + '&body=' + FEEDBACK_body_([
+    'What would be useful:', '', '', 'Why it matters to you:', '']);
 
 var toastTimer = null;
 
@@ -4131,23 +4125,20 @@ function settingsSheetHtml(){
   }
   h += '</form>';
   h += '<button class="btn alt" data-act="closeSettings" type="button">' + (first ? 'Not now' : 'Cancel') + '</button>';
-  // FEEDBACK. Nothing is collected and nothing is sent: these are plain links
-  // to a GitHub issue form the user opens in their own browser. That keeps the
-  // app's promise (no telemetry, no copy of your data) intact while still giving
-  // a stranger a way to reach the person who wrote it. Deliberately NOT shown
-  // during first-run setup -- asking for feedback before someone has entered a
-  // single number is noise.
   if (!first) {
     h += '<div class="dsec">';
     h += '<div class="dsec-h">Feedback</div>';
-    h += '<div class="hint" style="margin-top:0">Stackable is free and written by one person. ' +
-         'Telling me what is broken or missing is the most useful thing you can do.</div>';
-    h += '<a class="fbrow" href="' + esc(FEEDBACK_BUG_URL) + '" target="_blank" rel="noopener">' +
+    h += '<div class="hint" style="margin-top:0">Free, and written by one ' +
+         'person. Telling me what is broken or missing is the most useful ' +
+         'thing you can do.</div>';
+    h += '<a class="fbrow" href="' + esc(FEEDBACK_BUG_URL) + '" ' +
+         'target="_blank" rel="noopener">' +
          '<span>Report a problem</span><i>&rsaquo;</i></a>';
-    h += '<a class="fbrow" href="' + esc(FEEDBACK_IDEA_URL) + '" target="_blank" rel="noopener">' +
+    h += '<a class="fbrow" href="' + esc(FEEDBACK_IDEA_URL) + '" ' +
+         'target="_blank" rel="noopener">' +
          '<span>Suggest something</span><i>&rsaquo;</i></a>';
-    h += '<div class="hint" style="margin-top:6px">Opens a GitHub page. Nothing about your ' +
-         'sheet is sent with it.</div>';
+    h += '<div class="hint" style="margin-top:6px">Opens a GitHub page. ' +
+         'Nothing about your sheet is sent with it.</div>';
     h += '</div>';
   }
   // Extra room so the last control is never under the home indicator or a
