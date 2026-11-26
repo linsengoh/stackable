@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/35443383/README.md)
+
 # Stackable
 
 **How much bitcoin can you actually stack this month?**
