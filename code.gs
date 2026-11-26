@@ -1124,7 +1124,12 @@ function getSheet() {
   // wrong place. Create the tab instead, and fail loudly if that is impossible.
   var sheet = ss.getSheetByName('Expenses');
   if (!sheet) {
-    sheet = ss.insertSheet('Expenses');
+    try {
+      sheet = ss.insertSheet('Expenses');
+    } catch (e) {
+      sheet = ss.getSheetByName('Expenses');
+      if (!sheet) throw e;
+    }
   }
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(HEADERS);
@@ -1253,17 +1258,35 @@ var PAY_HEADERS = ['date','debtId','name','amount','principal','interest'];
 
 // Debts tab: one row per debt. Bitcoin-backed loans land here in v2 using the
 // same columns - 'notes' is already reserved so no migration is needed.
-function getDebtsSheet(ss) {
-  var sheet = ss.getSheetByName('Debts');
-  if (!sheet) {
-    sheet = ss.insertSheet('Debts');
-    sheet.appendRow(DEBT_HEADERS);
-    sheet.getRange(1, 1, 1, DEBT_HEADERS.length).setFontWeight('bold');
-    sheet.setColumnWidth(1, 130);
-    sheet.setColumnWidth(2, 160);
-    sheet.setColumnWidth(3, 90);
+// SAFE TAB ACCESS. getSheetByName() returning null does not guarantee that
+// insertSheet() will succeed: if anything else in the same request already
+// created the tab, insertSheet throws
+//   A sheet with the name X already exists
+// and the whole call fails. That is exactly what a fresh install hit - the red
+// banner over the welcome screen. Re-read on failure instead of throwing: a tab
+// that exists is a success regardless of who created it.
+function ensureTab_(ss, name, headers, widths) {
+  var sheet = ss.getSheetByName(name);
+  if (sheet) return sheet;
+  try {
+    sheet = ss.insertSheet(name);
+  } catch (e) {
+    sheet = ss.getSheetByName(name);
+    if (!sheet) throw e;
+    return sheet;
+  }
+  if (headers && headers.length) {
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  }
+  if (widths) {
+    for (var col in widths) sheet.setColumnWidth(Number(col), Number(widths[col]));
   }
   return sheet;
+}
+
+function getDebtsSheet(ss) {
+  return ensureTab_(ss, 'Debts', DEBT_HEADERS, { 1: 130, 2: 160, 3: 90 });
 }
 
 function readDebts() {
@@ -1418,27 +1441,11 @@ function extraPaymentEffect(debt, extra) {
 }
 
 function getSnapSheet(ss) {
-  var sheet = ss.getSheetByName('DebtHistory');
-  if (!sheet) {
-    sheet = ss.insertSheet('DebtHistory');
-    sheet.appendRow(SNAP_HEADERS);
-    sheet.getRange(1, 1, 1, SNAP_HEADERS.length).setFontWeight('bold');
-    sheet.setColumnWidth(1, 90);
-    sheet.setColumnWidth(3, 160);
-  }
-  return sheet;
+  return ensureTab_(ss, 'DebtHistory', SNAP_HEADERS, { 1: 90, 3: 160 });
 }
 
 function getPaySheet(ss) {
-  var sheet = ss.getSheetByName('DebtPayments');
-  if (!sheet) {
-    sheet = ss.insertSheet('DebtPayments');
-    sheet.appendRow(PAY_HEADERS);
-    sheet.getRange(1, 1, 1, PAY_HEADERS.length).setFontWeight('bold');
-    sheet.setColumnWidth(1, 90);
-    sheet.setColumnWidth(3, 160);
-  }
-  return sheet;
+  return ensureTab_(ss, 'DebtPayments', PAY_HEADERS, { 1: 90, 3: 160 });
 }
 
 // One month's sats-relevant debt reading. This USED to guess interest as
@@ -1536,12 +1543,17 @@ function recordStatement(p) {
     }
     if (!ss) return { ok: false, error: 'No spreadsheet' };
 
-    var sheet = ss.getSheetByName('Statements') || (function(){
-      var sh = ss.insertSheet('Statements');
-      sh.appendRow(['ym','payment','interest']);
-      sh.getRange(1,1,1,3).setFontWeight('bold');
-      return sh;
-    })();
+    var sheet = ss.getSheetByName('Statements');
+    if (!sheet) {
+      try {
+        sheet = ss.insertSheet('Statements');
+        sheet.appendRow(['ym','payment','interest']);
+        sheet.getRange(1,1,1,3).setFontWeight('bold');
+      } catch (e) {
+        sheet = ss.getSheetByName('Statements');
+        if (!sheet) throw e;
+      }
+    }
     var last = sheet.getLastRow();
     var existing = -1;
     if (last > 1) {
@@ -2572,9 +2584,9 @@ var state = {
 // FEEDBACK LINKS. Plain client constants, no server read.
 // The issue bodies are joined from arrays and turned into newlines with
 // String.fromCharCode(10), so this block contains NO backslash escapes.
-// An earlier version wrote a literal escape sequence inside this template
-// literal; it became a real newline inside a single-quoted string and killed
-// the entire client script -- the app rendered a blank page.
+// An earlier version wrote an escape sequence inside this template literal;
+// it became a real newline inside a single-quoted string and killed the whole
+// client script -- the app rendered a blank page.
 var FEEDBACK_REPO = 'https://github.com/linsengoh/stackable';
 function FEEDBACK_body_(lines){
   return encodeURIComponent(lines.join(String.fromCharCode(10)));
@@ -4126,18 +4138,18 @@ function settingsSheetHtml(){
   h += '</form>';
   h += '<button class="btn alt" data-act="closeSettings" type="button">' + (first ? 'Not now' : 'Cancel') + '</button>';
   if (!first) {
-    h += '<div class="dsec">';
-    h += '<div class="dsec-h">Feedback</div>';
-    h += '<div class="hint" style="margin-top:0">Free, and written by one ' +
+    h += '<div class=\"dsec\">';
+    h += '<div class=\"dsec-h\">Feedback</div>';
+    h += '<div class=\"hint\" style=\"margin-top:0\">Free, and written by one ' +
          'person. Telling me what is broken or missing is the most useful ' +
          'thing you can do.</div>';
-    h += '<a class="fbrow" href="' + esc(FEEDBACK_BUG_URL) + '" ' +
-         'target="_blank" rel="noopener">' +
+    h += '<a class=\"fbrow\" href=\"' + esc(FEEDBACK_BUG_URL) + '\" ' +
+         'target=\"_blank\" rel=\"noopener\">' +
          '<span>Report a problem</span><i>&rsaquo;</i></a>';
-    h += '<a class="fbrow" href="' + esc(FEEDBACK_IDEA_URL) + '" ' +
-         'target="_blank" rel="noopener">' +
+    h += '<a class=\"fbrow\" href=\"' + esc(FEEDBACK_IDEA_URL) + '\" ' +
+         'target=\"_blank\" rel=\"noopener\">' +
          '<span>Suggest something</span><i>&rsaquo;</i></a>';
-    h += '<div class="hint" style="margin-top:6px">Opens a GitHub page. ' +
+    h += '<div class=\"hint\" style=\"margin-top:6px\">Opens a GitHub page. ' +
          'Nothing about your sheet is sent with it.</div>';
     h += '</div>';
   }
